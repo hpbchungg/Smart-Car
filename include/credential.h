@@ -3,4 +3,4 @@
 #define BLYNK_TEMPLATE_NAME         "Device"
 #define BLYNK_AUTH_TOKEN            "YourAuthToken"
 #define SSID_WIFI                   "YourNetworkName"
-#define PASS_WIFI                   "YourPassword"
+#define PASS_WIFI                   "asdas"
