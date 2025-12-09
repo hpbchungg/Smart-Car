@@ -1,19 +1,12 @@
 #include <Arduino.h>
 #include "pinout.h"
+#include "credential.h"
 #include <EEPROM.h>
 #include <Ticker.h>
-
-/* Fill in information from Blynk Device Info here */
-#define BLYNK_TEMPLATE_ID           "TMPxxxxxx"
-#define BLYNK_TEMPLATE_NAME         "Device"
-#define BLYNK_AUTH_TOKEN            "YourAuthToken"
 
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <BlynkSimpleEsp32.h>
-
-char ssid[] = "YourNetworkName";
-char pass[] = "YourPassword";
 
 // Variables (same as original)
 int addr = 0;
@@ -281,7 +274,7 @@ void setup() {
   start = 0;
   readEeprom();
   Serial.begin(115200);
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  Blynk.begin(BLYNK_AUTH_TOKEN, SSID_WIFI, PASS_WIFI);
 
   // Timer setup for ESP32 (1ms interrupt)
   timerSemaphore = xSemaphoreCreateBinary();
