@@ -14,11 +14,11 @@ volatile int lastPos;
 volatile unsigned char isCalib = 0;
 volatile int servoPwm;
 volatile unsigned char sensor;
-unsigned int sensorValue[8];
-unsigned int sensorPID[8];
-unsigned int black_value[8];
-unsigned int white_value[8];
-unsigned int compare_value[8];
+unsigned int sensorValue[6];
+unsigned int sensorPID[6];
+unsigned int black_value[6];
+unsigned int white_value[6];
+unsigned int compare_value[6];
 int speed_run_forward;
 int cnt = 0;
 unsigned char pattern, start;
@@ -36,23 +36,33 @@ volatile SemaphoreHandle_t timerSemaphore;
 void speed_run(int speedDC_left, int speedDC_right)
 {
   if (speedDC_left < 0) {
-    ledcWrite(1, 255 + speedDC_left);
+    analogWrite(LEFT_MOTOR_IN1_PIN, 255 + speedDC_left);
     digitalWrite(LEFT_MOTOR_IN1_PIN, HIGH);
   } else if (speedDC_left >= 0) {
     speedDC_left = speedDC_left;
-    ledcWrite(1, speedDC_left);
+    analogWrite(LEFT_MOTOR_IN1_PIN, speedDC_left);
     digitalWrite(LEFT_MOTOR_IN1_PIN, LOW);
   }
   if (speedDC_right < 0) {
-    ledcWrite(2, 255 + speedDC_right);
+    analogWrite(RIGHT_MOTOR_IN2_PIN, 255 + speedDC_right);
     digitalWrite(RIGHT_MOTOR_IN1_PIN, HIGH);
   } else if (speedDC_right >= 0) {
     speedDC_right = speedDC_right;
-    ledcWrite(2, speedDC_right);
+    analogWrite(RIGHT_MOTOR_IN2_PIN, speedDC_right);
     digitalWrite(RIGHT_MOTOR_IN1_PIN, LOW);
   }
 }
-
+void read_sensor_2()
+{
+  sensorValue[0] = 4095 - analogRead(LINE_SENSOR_IN8);
+  sensorValue[1] = 4095 - analogRead(LINE_SENSOR_IN7);
+  // sensorValue[2] = 4095 - analogRead(LINE_SENSOR_IN6);
+  sensorValue[2] = 4095 - analogRead(LINE_SENSOR_IN5);
+  sensorValue[3] = 4095 - analogRead(LINE_SENSOR_IN4);
+  // sensorValue[5] = 4095 - analogRead(LINE_SENSOR_IN3);
+  sensorValue[4] = 4095 - analogRead(LINE_SENSOR_IN2);
+  sensorValue[5] = 4095 - analogRead(LINE_SENSOR_IN1);
+}
 void read_sensor()
 {
   unsigned char temp = 0;
@@ -62,13 +72,13 @@ void read_sensor()
   int iRet;
   sensorValue[0] = 4095 - analogRead(LINE_SENSOR_IN8);
   sensorValue[1] = 4095 - analogRead(LINE_SENSOR_IN7);
-  sensorValue[2] = 4095 - analogRead(LINE_SENSOR_IN6);
-  sensorValue[3] = 4095 - analogRead(LINE_SENSOR_IN5);
-  sensorValue[4] = 4095 - analogRead(LINE_SENSOR_IN4);
-  sensorValue[5] = 4095 - analogRead(LINE_SENSOR_IN3);
-  sensorValue[6] = 4095 - analogRead(LINE_SENSOR_IN2);
-  sensorValue[7] = 4095 - analogRead(LINE_SENSOR_IN1);
-  for (int j = 0; j < 8; j++) {
+  // sensorValue[2] = 4095 - analogRead(LINE_SENSOR_IN6);
+  sensorValue[2] = 4095 - analogRead(LINE_SENSOR_IN5);
+  sensorValue[3] = 4095 - analogRead(LINE_SENSOR_IN4);
+  // sensorValue[5] = 4095 - analogRead(LINE_SENSOR_IN3);
+  sensorValue[4] = 4095 - analogRead(LINE_SENSOR_IN2);
+  sensorValue[5] = 4095 - analogRead(LINE_SENSOR_IN1);
+  for (int j = 0; j < 6; j++) {
     if (isCalib == 0) {
       if (sensorValue[j] < black_value[j])
         sensorValue[j] = black_value[j];
@@ -84,7 +94,7 @@ void read_sensor()
     }
     sensor = temp;
   }
-  for (int j = 0; j < 8; j++) {
+  for (int j = 0; j < 6; j++) {
     avg += (long)(sensorPID[j]) * ((j)*1000);
     sum += sensorPID[j];
   }
@@ -104,7 +114,7 @@ void read_sensor()
 
 void readEeprom() {
   EEPROM.begin(512);
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 6; i++) {
     compare_value[i] = EEPROM.read(i) * 4;
   }
 }
@@ -202,10 +212,10 @@ void runforwardline(int speed)
 }
 
 void updateLine() {
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 6; i++) {
       Serial.print(sensorValue[i]);
       Serial.print("  ");
-    if (black_value[i] == 0) black_value[i] = 1100;
+    if (black_value[i] == 0) black_value[i] = 4100;
     if (sensorValue[i] < black_value[i]) black_value[i] = sensorValue[i];
     if (sensorValue[i] > white_value[i]) white_value[i] = sensorValue[i];
     compare_value[i] = (black_value[i] + white_value[i]) / 2;
@@ -231,16 +241,36 @@ unsigned char sensorMask(unsigned char mask) {
 
 void IRAM_ATTR onTimer() {
   xSemaphoreGiveFromISR(timerSemaphore, NULL);
-  read_sensor();
+  read_sensor_2();
   cnt++;
+}
+
+// Interrupt Service Routine (ISR)
+void ARDUINO_ISR_ATTR buttonISR() {
+  Serial.println("Button pressed!");
+  mode = !mode;
 }
 
 // Blynk virtual pin handlers
 BLYNK_WRITE(V0) { // Switch for mode: 0 manual, 1 auto
+  Serial.print("Mode changed to: ");
+  Serial.println(param.asInt());
   mode = param.asInt();
 }
 
-BLYNK_WRITE(V1) { // Joystick for manual control
+BLYNK_WRITE(V1) { // Switch for mode: 0 not Calibrate, 1 Calibrate
+  Serial.print("Calibration mode changed to: ");
+  Serial.println(param.asInt());
+  isCalib = param.asInt();
+}
+
+BLYNK_WRITE(V2) { // Joystick for manual control
+  int x = param[0].asInt(); // -127 to 127
+  int y = param[1].asInt(); // -127 to 127
+  Serial.print("Joystick X: ");
+  Serial.print(x);
+  Serial.print(" Y: ");
+  Serial.println(y);
   if (mode == 0) {
     int x = param[0].asInt(); // -127 to 127
     int y = param[1].asInt(); // -127 to 127
@@ -252,150 +282,145 @@ BLYNK_WRITE(V1) { // Joystick for manual control
     if (left < -255) left = -255;
     if (right > 255) right = 255;
     if (right < -255) right = -255;
-    speed_run(left, right);
+    // speed_run(left, right);
   }
 }
 
-// Blynk virtual pin handlers
-BLYNK_WRITE(V2) { // Switch for mode: 0 not Calibrate, 1 Calibrate
-  isCalib = param.asInt();
-}
-
 void setup() {
+  Serial.begin(115200);
   pinMode(LEFT_MOTOR_IN1_PIN, OUTPUT);
   pinMode(RIGHT_MOTOR_IN1_PIN, OUTPUT);
   pinMode(ULTRA_SONIC_TRIG_PIN, OUTPUT);
   pinMode(ULTRA_SONIC_ECHO_PIN, INPUT);
   digitalWrite(LEFT_MOTOR_IN1_PIN, LOW);
   digitalWrite(RIGHT_MOTOR_IN1_PIN, LOW);
-
+  attachInterrupt(BUTTON, buttonISR, RISING);
   speed_run(0, 0);
   pattern = 10;
   start = 0;
+  isCalib = 1;
   readEeprom();
-  Serial.begin(115200);
-  Blynk.begin(BLYNK_AUTH_TOKEN, SSID_WIFI, PASS_WIFI);
-
   // Timer setup for ESP32 (1ms interrupt)
   timerSemaphore = xSemaphoreCreateBinary();
   timer = timerBegin(0, 80, true); // 80MHz / 80 = 1MHz, for 1us tick
   timerAttachInterrupt(timer, &onTimer, true);
-  timerAlarmWrite(timer, 1000, true); // 1ms
+  timerAlarmWrite(timer, 100000, true); // 1ms
   timerAlarmEnable(timer);
-
-  isCalib = 1;
-
-  // PWM setup
-  ledcSetup(1, 5000, 8); // Channel 1 for LPWM
-  ledcAttachPin(LEFT_MOTOR_IN2_PIN, 1);
-  ledcSetup(2, 5000, 8); // Channel 2 for RPWM
-  ledcAttachPin(RIGHT_MOTOR_IN2_PIN, 2);
+  // Blynk.begin(BLYNK_AUTH_TOKEN, SSID_WIFI, PASS_WIFI);
 }
 
 void loop() {
-  Blynk.run();
-  if (xSemaphoreTake(timerSemaphore, 0) == pdTRUE) {
-    // Processed in ISR
+  if(mode)
+  {
+    updateLine();
+    delay(10);
   }
+  // Serial.printf("Distance: %.2f cm\n", getDistance());
+  // delay(1000);
+  // Blynk.run();
 
-  if (mode == 0) { // Manual mode via Blynk
-    // Control handled in BLYNK_WRITE(V1)
-    // In calibration, if needed
-    if (isCalib) updateLine();
-  } else { // Auto mode
-    // Learning/avoidance: In auto, check obstacle
-    float dist = getDistance();
-    if (dist < obstacle_threshold && pattern == 11) {
-      // Simple avoidance: stop, reverse briefly, turn right
-      speed_run(-80, 80); // turn right
-      delay(500);
-      speed_run(80, -80); // turn left
-      delay(500);
-      speed_run(80, -80); // turn left
-      delay(500);
-      // Then continue
-    }
+  // if (xSemaphoreTake(timerSemaphore, 0) == pdTRUE) {
+  //   // Processed in ISR
+  // }
 
-    switch (pattern) {  
-      case 10:
-        if (cnt >= 50) {
-          pattern = 11;
-          cnt = 0;
-          break;
-        }
-        runforwardline(speed_run_forward);
-        break;
-      case 11:
-        if (sensorMask(0x01) == 0x01) {
-          RememberLine = 1;
-          cnt = 0;
-        } else if (sensorMask(0x80) == 0x80) {
-          RememberLine = -1;
-          cnt = 0;
-        }
-        if (cnt > 500) RememberLine = 0;
-        if (sensor == 0b00000000) {
-          if (RememberLine != 0) {
-            if (RememberLine == 1) {
-              handleAndSpeed(40, speed_run_forward);
-            } else if (RememberLine == -1) {
-              handleAndSpeed(-40, speed_run_forward);
-            }
-          } else {
-            speed_run(0, 0);
-          }
-          break;
-        } else runforwardline(speed_run_forward);  
-        if (sensorMask(0b00111100) != 0b00000000) {
-          RememberLine = 0;
-        }
-        break;
-      // Other cases as in original
-      case 12:
-        if (RememberLine == 1) {
-          speed_run(100, -40);
-          pattern = 21;
-          break;
-        } else if (RememberLine == -1) {
-          speed_run(-40, 100);
-          pattern = 31;
-          break;
-        } else {
-          pattern = 11;
-          break;
-        }
-      case 21:
-        speed_run(100, -40);
-        if (sensorMask(0xff) != 0) {
-          speed_run(60, 60 / 2);
-          pattern = 22;
-        }
-        break;
-      case 22:
-        speed_run(60, 60 / 2);
-        if (sensorMask(0xfc) != 0) {
-          pattern = 11;
-        }
-        break;
-      case 31:
-        speed_run(-40, 60);
-        if (sensorMask(0xff) != 0) {
-          speed_run(60 / 2, 60);
-          pattern = 32;
-        }
-        break;
-      case 32:
-        speed_run(60 / 2, 60);
-        if (sensorMask(0x3f) != 0) {
-          pattern = 11;
-        }
-        break;
-      case 100:
-        speed_run(0, 0);
-        break;
-      default:
-        pattern = 11;
-        break;
-    }
-  }
+  // if (mode == 0) { // Manual mode via Blynk
+  //   // Control handled in BLYNK_WRITE(V1)
+  //   // In calibration, if needed
+  //   if (isCalib) updateLine();
+  // } else { // Auto mode
+  //   // Learning/avoidance: In auto, check obstacle
+  //   float dist = getDistance();
+  //   if (dist < obstacle_threshold && pattern == 11) {
+  //     // Simple avoidance: stop, reverse briefly, turn right
+  //     speed_run(-80, 80); // turn right
+  //     delay(500);
+  //     speed_run(80, -80); // turn left
+  //     delay(500);
+  //     speed_run(80, -80); // turn left
+  //     delay(500);
+  //     // Then continue
+  //   }
+
+  //   switch (pattern) {  
+  //     case 10:
+  //       if (cnt >= 50) {
+  //         pattern = 11;
+  //         cnt = 0;
+  //         break;
+  //       }
+  //       runforwardline(speed_run_forward);
+  //       break;
+  //     case 11:
+  //       if (sensorMask(0x01) == 0x01) {
+  //         RememberLine = 1;
+  //         cnt = 0;
+  //       } else if (sensorMask(0x80) == 0x80) {
+  //         RememberLine = -1;
+  //         cnt = 0;
+  //       }
+  //       if (cnt > 500) RememberLine = 0;
+  //       if (sensor == 0b00000000) {
+  //         if (RememberLine != 0) {
+  //           if (RememberLine == 1) {
+  //             handleAndSpeed(40, speed_run_forward);
+  //           } else if (RememberLine == -1) {
+  //             handleAndSpeed(-40, speed_run_forward);
+  //           }
+  //         } else {
+  //           speed_run(0, 0);
+  //         }
+  //         break;
+  //       } else runforwardline(speed_run_forward);  
+  //       if (sensorMask(0b00111100) != 0b00000000) {
+  //         RememberLine = 0;
+  //       }
+  //       break;
+  //     // Other cases as in original
+  //     case 12:
+  //       if (RememberLine == 1) {
+  //         speed_run(100, -40);
+  //         pattern = 21;
+  //         break;
+  //       } else if (RememberLine == -1) {
+  //         speed_run(-40, 100);
+  //         pattern = 31;
+  //         break;
+  //       } else {
+  //         pattern = 11;
+  //         break;
+  //       }
+  //     case 21:
+  //       speed_run(100, -40);
+  //       if (sensorMask(0xff) != 0) {
+  //         speed_run(60, 60 / 2);
+  //         pattern = 22;
+  //       }
+  //       break;
+  //     case 22:
+  //       speed_run(60, 60 / 2);
+  //       if (sensorMask(0xfc) != 0) {
+  //         pattern = 11;
+  //       }
+  //       break;
+  //     case 31:
+  //       speed_run(-40, 60);
+  //       if (sensorMask(0xff) != 0) {
+  //         speed_run(60 / 2, 60);
+  //         pattern = 32;
+  //       }
+  //       break;
+  //     case 32:
+  //       speed_run(60 / 2, 60);
+  //       if (sensorMask(0x3f) != 0) {
+  //         pattern = 11;
+  //       }
+  //       break;
+  //     case 100:
+  //       speed_run(0, 0);
+  //       break;
+  //     default:
+  //       pattern = 11;
+  //       break;
+  //   }
+  // }
 }
